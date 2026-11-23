@@ -1,0 +1,36 @@
+name: P vs NP public snapshot
+on:
+  push:
+    branches: [codex/pnp-remote-check]
+    paths: [.github/workflows/pnp-remote-check.yml]
+permissions: {}
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read public desk catalogue and leaderboard
+        env:
+          GH_HANDLE: KainanP
+        run: |
+          python3 - <<'PY'
+          import collections, json, os, urllib.parse, urllib.request
+          host = 'https://data.pequalnp.com'
+          def get(path):
+              url = urllib.parse.urljoin(host, path)
+              if urllib.parse.urlsplit(url).netloc != urllib.parse.urlsplit(host).netloc:
+                  raise ValueError("Unexpected data host")
+              with urllib.request.urlopen(url, timeout=15) as response:
+                  return json.load(response)
+          head = get('/head.json')
+          contributors = get(head['files']['contributors'])['contributors']
+          ordered = sorted(contributors, key=lambda item: (-item['steps'], item['first_proof_at'], item['github']))
+          for rank, item in enumerate(ordered, 1):
+              if rank == 1 or item['github'].lower() == os.environ['GH_HANDLE'].lower():
+                  print(f"rank={rank} github={item['github']} credited={item['steps']}")
+          public = get('/data/desk/gaps.json')
+          print('catalogue weights:', dict(sorted(collections.Counter(gap['weight'] for gap in public['gaps']).items())))
+          for gap in public['gaps']:
+              if gap['weight'] > 1:
+                  print('priority gap:', gap['id'], gap['weight'])
+          PY
